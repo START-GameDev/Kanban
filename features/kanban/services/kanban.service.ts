@@ -91,6 +91,25 @@ export const kanbanService = {
     await batch.commit();
   },
   
+  async getAllUsers() {
+    const snap = await getDocs(collection(db, 'users'));
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  },
+
+  async addUserToProject(projectId: string, userId: string) {
+    // 1. add to members subcollection
+    await setDoc(doc(db, 'projects', projectId, 'members', userId), {
+      role: 'member',
+      joinedAt: new Date()
+    });
+
+    // 2. update projects memberIds array
+    const projRef = doc(db, 'projects', projectId);
+    await updateDoc(projRef, {
+      memberIds: arrayUnion(userId)
+    });
+  },
+
   async inviteUserByEmail(projectId: string, email: string) {
     // 1. Find user by email
     const usersQ = query(collection(db, 'users'), where('email', '==', email));

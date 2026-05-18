@@ -17,12 +17,14 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
   
   const [loading, setLoading] = useState(true);
   const [projectName, setProjectName] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
 
   const [projectMembers, setProjectMembers] = useState<any[]>([]);
+
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [selectedUserToAdd, setSelectedUserToAdd] = useState('');
 
   useEffect(() => {
     // Load project details
@@ -32,6 +34,10 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
 
     kanbanService.getProjectMembers(projectId).then(members => {
       setProjectMembers(members);
+    });
+
+    kanbanService.getAllUsers().then(users => {
+      setAllUsers(users);
     });
 
     const unsubCols = kanbanService.subscribeToColumns(projectId, (cols) => {
@@ -48,20 +54,28 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
     };
   }, [projectId, setColumns, setTasks]);
 
-  const handleInvite = async (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if(!inviteEmail) return;
+    if(!selectedUserToAdd) return;
     setIsInviting(true);
     try {
-      await kanbanService.inviteUserByEmail(projectId, inviteEmail);
-      alert("Usuário convidado!");
-      setInviteEmail('');
+      await kanbanService.addUserToProject(projectId, selectedUserToAdd);
+      
+      // Update local members list
+      const addedUser = allUsers.find(u => u.id === selectedUserToAdd);
+      if (addedUser && !projectMembers.some(m => m.id === addedUser.id)) {
+        setProjectMembers([...projectMembers, addedUser]);
+      }
+      
+      setSelectedUserToAdd('');
     } catch(err: any) {
-      alert(err.message || 'Erro ao convidar.');
+      alert(err.message || 'Erro ao adicionar usuário.');
     } finally {
       setIsInviting(false);
     }
   };
+
+  const availableUsers = allUsers.filter(u => !projectMembers.some(m => m.id === u.id));
 
   const handleCreateColumn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,18 +111,21 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
-          <form onSubmit={handleInvite} className="flex gap-2">
-            <input 
-              type="email" 
-              value={inviteEmail} 
-              onChange={e => setInviteEmail(e.target.value)} 
-              placeholder="Email do usuário..." 
+          <form onSubmit={handleAddUser} className="flex gap-2">
+            <select 
+              value={selectedUserToAdd} 
+              onChange={e => setSelectedUserToAdd(e.target.value)} 
               required
-              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus-visible:ring-1 focus-visible:ring-indigo-500 focus-visible:outline-none w-48"
-            />
-            <button type="submit" disabled={isInviting} className="p-2 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2 transition-colors">
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus-visible:ring-1 focus-visible:ring-indigo-500 focus-visible:outline-none w-48 bg-white"
+            >
+              <option value="" disabled>Adicionar usuário...</option>
+              {availableUsers.map(user => (
+                <option key={user.id} value={user.id}>{user.name || user.email}</option>
+              ))}
+            </select>
+            <button type="submit" disabled={isInviting || !selectedUserToAdd} className="p-2 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2 transition-colors disabled:opacity-50">
               <Users className="w-5 h-5" />
-              <span className="hidden lg:inline text-sm font-medium">Convidar</span>
+              <span className="hidden lg:inline text-sm font-medium">Adicionar</span>
             </button>
           </form>
 
