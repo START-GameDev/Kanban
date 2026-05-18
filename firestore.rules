@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Catch-all deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Projects Collection
+    match /projects/{projectId} {
+      allow create: if isSignedIn();
+      allow read, update: if isSignedIn() && (request.auth.uid in resource.data.memberIds);
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+
+      // Subcollection: Members
+      match /members/{memberId} {
+        allow read: if isSignedIn(); 
+        allow create, update: if isSignedIn(); // Simplificado para facilitar a criação inicial e convites
+        allow delete: if isSignedIn() && (request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.memberIds);
+      }
+
+      // Subcollection: Columns
+      match /columns/{columnId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isSignedIn();
+      }
+
+      // Subcollection: Tasks
+      match /tasks/{taskId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isSignedIn();
+      }
+    }
+  }
+}
