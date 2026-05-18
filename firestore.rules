@@ -22,8 +22,8 @@ service cloud.firestore {
 
       // Subcollection: Members
       match /members/{memberId} {
-        allow read: if isSignedIn(); 
-        allow create, update: if isSignedIn(); // Simplificado para facilitar a criação inicial e convites
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn(); 
         allow delete: if isSignedIn() && (request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.memberIds);
       }
 

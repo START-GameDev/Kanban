@@ -32,13 +32,39 @@ export const kanbanService = {
     });
   },
 
+  async getProjectMembers(projectId: string) {
+    const projRef = doc(db, 'projects', projectId);
+    const snap = await getDoc(projRef);
+    if (!snap.exists()) return [];
+    
+    const memberIds = snap.data().memberIds || [];
+    if (memberIds.length === 0) return [];
+
+    const usersQ = query(collection(db, 'users'), where('uid', 'in', memberIds));
+    const usersSnap = await getDocs(usersQ);
+    
+    return usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
   async addColumn(projectId: string, name: string, order: number) {
     await addDoc(collection(db, 'projects', projectId, 'columns'), { name, order });
   },
 
-  async addTask(projectId: string, columnId: string, title: string, order: number) {
+  async updateColumn(projectId: string, columnId: string, name: string) {
+    const ref = doc(db, 'projects', projectId, 'columns', columnId);
+    await updateDoc(ref, { name });
+  },
+
+  async deleteColumn(projectId: string, columnId: string) {
+    const ref = doc(db, 'projects', projectId, 'columns', columnId);
+    await deleteDoc(ref);
+  },
+
+  async addTask(projectId: string, columnId: string, title: string, order: number, description?: string, assigneeId?: string) {
     await addDoc(collection(db, 'projects', projectId, 'tasks'), {
       title,
+      description: description || null,
+      assigneeId: assigneeId || null,
       columnId,
       order,
       createdAt: new Date()

@@ -1,14 +1,11 @@
-import { collection, doc, setDoc, addDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, doc, query, where, onSnapshot, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { Project, ProjectInput } from '../schemas/project';
 
 export const projectsService = {
   async createProject(userId: string, data: ProjectInput) {
     try {
-      const { writeBatch, collection, doc } = await import('firebase/firestore');
       const batch = writeBatch(db);
-      
-      // Gerar ID manualmente para o projeto para usar no batch
       const projectRef = doc(collection(db, 'projects'));
       
       batch.set(projectRef, {
@@ -25,10 +22,9 @@ export const projectsService = {
       });
 
       await batch.commit();
-      console.log("Projeto criado com sucesso:", projectRef.id);
       return projectRef.id;
     } catch (error) {
-      console.error("Erro detalhado no createProject:", error);
+      console.error("Erro no createProject:", error);
       throw error;
     }
   },

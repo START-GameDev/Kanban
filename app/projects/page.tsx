@@ -28,11 +28,18 @@ export default function ProjectsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjectName.trim() || !user) return;
+    const name = newProjectName.trim();
+    
+    if (!name) {
+      alert("Por favor, digite um nome para o projeto.");
+      return;
+    }
+
+    if (!user) return;
     
     setIsCreating(true);
     try {
-      await projectsService.createProject(user.uid, { name: newProjectName.trim() });
+      await projectsService.createProject(user.uid, { name });
       setNewProjectName('');
     } catch (err: any) {
       console.error(err);
@@ -56,9 +63,13 @@ export default function ProjectsPage() {
             value={newProjectName}
             onChange={(e) => setNewProjectName(e.target.value)}
             disabled={isCreating}
-            className="w-full sm:w-64 border-slate-200 focus-visible:ring-indigo-500 rounded-lg placeholder:text-slate-400"
+            className="w-full sm:w-64 border-slate-200 focus-visible:ring-indigo-500 rounded-lg placeholder:text-slate-400 bg-white"
           />
-          <Button type="submit" disabled={isCreating || !newProjectName.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
+          <Button 
+            type="submit" 
+            disabled={isCreating} 
+            className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all active:scale-95 disabled:opacity-70"
+          >
             {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
             Criar
           </Button>
