@@ -20,41 +20,39 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   setTasks: (tasks) => set({ tasks }),
   
   moveTask: (projectId, taskId, newColumnId, newIndex) => {
-    // 1. Optimistic Update
     const { tasks } = get();
-    const taskIndex = tasks.findIndex(t => t.id === taskId);
-    if (taskIndex === -1) return;
+    const taskToMove = tasks.find(t => t.id === taskId);
+    if (!taskToMove) return;
 
-    const task = tasks[taskIndex];
-    const oldColumnId = task.columnId;
-
-    // Remove task from old list
-    const newTasks = [...tasks];
-    newTasks.splice(taskIndex, 1);
-
-    // Filter tasks in new column, sort by order
-    const columnTasks = newTasks.filter(t => t.columnId === newColumnId).sort((a, b) => a.order - b.order);
+    // Filter out the moving task from old status and new status tasks to prevent duplications
+    const otherTasks = tasks.filter(t => t.id !== taskId && t.columnId !== newColumnId);
     
-    // Insert at new index
-    columnTasks.splice(newIndex, 0, { ...task, columnId: newColumnId });
+    // Get all other tasks in the target column, sorted by order
+    const targetColumnTasks = tasks
+      .filter(t => t.id !== taskId && t.columnId === newColumnId)
+      .sort((a, b) => a.order - b.order);
 
-    // Recalculate orders for all tasks in the new column
+    // Insert taskToMove at the specified newIndex in the target column array
+    const updatedTask = { ...taskToMove, columnId: newColumnId };
+    targetColumnTasks.splice(newIndex, 0, updatedTask);
+
+    // Recalculate orders for all tasks in the target column
     const updates: { id: string; columnId: string; order: number }[] = [];
-    columnTasks.forEach((t, i) => {
+    targetColumnTasks.forEach((t, i) => {
       const order = i * 1000;
       t.order = order;
       updates.push({ id: t.id, columnId: newColumnId, order });
     });
 
-    // Update state
-    set({
-      tasks: newTasks.map(t => {
-        const update = updates.find(u => u.id === t.id);
-        return update ? { ...t, ...update } : t;
-      })
-    });
+    // Merge other columns' tasks with the updated target column's tasks
+    const finalTasks = [
+      ...otherTasks,
+      ...targetColumnTasks
+    ];
 
-    // 2. Persist
+    set({ tasks: finalTasks });
+
+    // 2. Persist to Firestore
     kanbanService.updateTaskBatch(projectId, updates).catch(console.error);
   },
 

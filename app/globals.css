@@ -1,1 +1,65 @@
 @import "tailwindcss";
+
+/* Ensure all clickable/interactive elements show the pointer cursor */
+button,
+a,
+select,
+option,
+input[type="submit"],
+input[type="button"],
+[role="button"],
+[onClick] {
+  cursor: pointer !important;
+}
+
+/* Universal Scrollbar Settings */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.45);
+}
+
+/* Light Theme Scrollbar Adjustments */
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.2);
+}
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.4);
+}
+
+/* Cyberpunk Orange Accent Scrollbar Thumb */
+.cyberpunk ::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.2);
+}
+.cyberpunk ::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.5);
+}
+
+/* Universal Transition Support to prevent snappy theme switches */
+body, 
+div, 
+header, 
+section, 
+form, 
+input, 
+select {
+  transition-property: color, background-color, border-color, shadow;
+  transition-duration: 250ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}

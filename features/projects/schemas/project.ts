@@ -14,4 +14,5 @@ export interface Project {
   name: string;
   ownerId: string;
   createdAt: Date;
+  memberIds?: string[];
 }

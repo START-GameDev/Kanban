@@ -21,23 +21,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Save or update user profile in Firestore
-        const userRef = doc(db, 'users', firebaseUser.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (!userSnap.exists()) {
-          await setDoc(userRef, {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            name: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL,
-            createdAt: new Date()
-          });
+      try {
+        if (firebaseUser) {
+          // Save or update user profile in Firestore
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (!userSnap.exists()) {
+            await setDoc(userRef, {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              name: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+              createdAt: new Date()
+            });
+          }
         }
+      } catch (err) {
+        console.error("Erro ao verificar/salvar usuário no Firestore:", err);
+      } finally {
+        setUser(firebaseUser);
+        setLoading(false);
       }
-      setUser(firebaseUser);
-      setLoading(false);
     });
 
     return () => unsubscribe();

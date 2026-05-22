@@ -29,7 +29,7 @@ export const projectsService = {
     }
   },
 
-  subscribeToUserProjects(userId: string, callback: (projects: Project[]) => void) {
+  subscribeToUserProjects(userId: string, callback: (projects: Project[]) => void, onError?: (err: any) => void) {
     // Listen to projects where user is owner OR user is in members subcollection.
     // Given no-sql, simple where clauses on main 'projects' are easiest for owners,
     // but a combined list is tricky if we use subcollections for members.
@@ -49,6 +49,9 @@ export const projectsService = {
         createdAt: doc.data().createdAt?.toDate() || new Date()
       })) as Project[];
       callback(projects);
+    }, (error) => {
+      console.error("Erro na escuta dos projetos:", error);
+      if (onError) onError(error);
     });
   }
 };
