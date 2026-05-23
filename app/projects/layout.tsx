@@ -103,7 +103,7 @@ export default function ProjectsLayout({ children }: { children: React.ReactNode
               <KanbanSquare className="w-4.5 h-4.5" />
             </div>
             <span className="text-sm font-semibold tracking-tight uppercase font-mono hover:opacity-80 transition-opacity cursor-pointer">
-              velox.board
+              nexion.board
             </span>
           </Link>
         </div>

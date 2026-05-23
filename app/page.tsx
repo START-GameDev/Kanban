@@ -37,7 +37,7 @@ export default function HomePage() {
             <KanbanSquare className="w-4.5 h-4.5 text-black" />
           </div>
           <span className="text-sm font-semibold tracking-tight text-white font-mono">
-            velox.sh
+            nexion.sh
           </span>
         </div>
         <div className="hidden sm:flex items-center space-x-1.5 text-[10px] uppercase font-semibold font-mono px-2.5 py-1 bg-zinc-950 border border-zinc-900 rounded-md text-zinc-400">

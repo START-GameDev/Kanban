@@ -1,5 +1,5 @@
 {
-  "name": "Velox Kanban",
+  "name": "Nexion Kanban",
   "description": "Sistema de Kanban Real-time e Multi-usuário com Firebase",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

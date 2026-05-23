@@ -4,6 +4,8 @@ import { useEffect, useState, use, useRef } from 'react';
 import { useKanbanStore } from '@/features/kanban/store/kanban.store';
 import { kanbanService } from '@/features/kanban/services/kanban.service';
 import { Board } from '@/features/kanban/components/board';
+import { AddTaskModal } from '@/features/kanban/components/add-task-modal';
+import { EditTaskModal } from '@/features/kanban/components/edit-task-modal';
 import { useTheme } from '@/providers/theme-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { doc, getDoc } from 'firebase/firestore';
@@ -12,6 +14,7 @@ import { Loader2, ArrowLeft, Users, Plus, X, Shield, Check, Trash2, Search, Penc
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MultiSearchableSelect } from '@/components/ui/multi-searchable-select';
 
 const colors = [
   'bg-emerald-500/15 text-emerald-600 border-emerald-550/25 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
@@ -72,14 +75,28 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
   const [addTaskColumnId, setAddTaskColumnId] = useState<string | null>(null);
   const [addFormTitle, setAddFormTitle] = useState('');
   const [addFormDesc, setAddFormDesc] = useState('');
-  const [addFormAssignee, setAddFormAssignee] = useState('');
+  const [addFormAssigneeIds, setAddFormAssigneeIds] = useState<string[]>([]);
+  const [addFormTags, setAddFormTags] = useState<string[]>([]);
+  const [addFormTimerType, setAddFormTimerType] = useState<'none' | 'datetime' | 'duration'>('none');
+  const [addFormDueDate, setAddFormDueDate] = useState('');
+  const [addFormDurationValue, setAddFormDurationValue] = useState<number>(15);
+  const [addFormDurationUnit, setAddFormDurationUnit] = useState<'minutes' | 'hours'>('minutes');
+  const [addFormTargetColumnId, setAddFormTargetColumnId] = useState('');
+  const [addFormPriority, setAddFormPriority] = useState('medium');
   const [isSavingNewTask, setIsSavingNewTask] = useState(false);
 
   // Edit Task Modal States
   const [editingTask, setEditingTask] = useState<any | null>(null);
   const [editFormTitle, setEditFormTitle] = useState('');
   const [editFormDesc, setEditFormDesc] = useState('');
-  const [editFormAssignee, setEditFormAssignee] = useState('');
+  const [editFormAssigneeIds, setEditFormAssigneeIds] = useState<string[]>([]);
+  const [editFormTags, setEditFormTags] = useState<string[]>([]);
+  const [editFormTimerType, setEditFormTimerType] = useState<'none' | 'datetime' | 'duration'>('none');
+  const [editFormDueDate, setEditFormDueDate] = useState('');
+  const [editFormDurationValue, setEditFormDurationValue] = useState<number>(15);
+  const [editFormDurationUnit, setEditFormDurationUnit] = useState<'minutes' | 'hours'>('minutes');
+  const [editFormTargetColumnId, setEditFormTargetColumnId] = useState('');
+  const [editFormPriority, setEditFormPriority] = useState('');
   const [isSavingEditTask, setIsSavingEditTask] = useState(false);
 
   // Custom Deletion Confirmation Modal State
@@ -89,7 +106,14 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
   // Task filter states
   const [filterColumnId, setFilterColumnId] = useState<string>('all');
   const [filterAssigneeId, setFilterAssigneeId] = useState<string>('all');
+  const [filterSearchTerm, setFilterSearchTerm] = useState('');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [filterTag, setFilterTag] = useState<string>('all');
+  const [filterTimer, setFilterTimer] = useState<string>('all');
   const [isFilterBarOpen, setIsFilterBarOpen] = useState(false);
+
+  // Persistent Project Tags State
+  const [projectTags, setProjectTags] = useState<string[]>([]);
 
   // Column Delete custom modal states
   const [columnToDelete, setColumnToDelete] = useState<any | null>(null);
@@ -189,10 +213,23 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
       }
     );
 
+    const unsubTags = kanbanService.subscribeToTags(
+      projectId,
+      (tags) => {
+        if (isSubscribed) {
+          setProjectTags(tags);
+        }
+      },
+      (error) => {
+        console.error("Erro ao assinar tags do projeto:", error);
+      }
+    );
+
     return () => {
       isSubscribed = false;
       unsubCols();
       unsubTasks();
+      unsubTags();
     };
   }, [projectId, user, authLoading, setColumns, setTasks]);
 
@@ -307,11 +344,40 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
     try {
       const relevantTasks = useKanbanStore.getState().tasks.filter(t => t.columnId === addTaskColumnId);
       const order = relevantTasks.length * 1000;
-      await kanbanService.addTask(projectId, addTaskColumnId, addFormTitle.trim(), order, addFormDesc.trim(), addFormAssignee);
+
+      let finalDueDate: Date | null = null;
+      if (addFormTimerType === 'datetime' && addFormDueDate) {
+        finalDueDate = new Date(addFormDueDate);
+      } else if (addFormTimerType === 'duration' && addFormDurationValue > 0) {
+        const multiplier = addFormDurationUnit === 'hours' ? 60 * 60 * 1000 : 60 * 1000;
+        finalDueDate = new Date(Date.now() + addFormDurationValue * multiplier);
+      }
+
+      await kanbanService.addTask(
+        projectId,
+        addTaskColumnId,
+        addFormTitle.trim(),
+        order,
+        addFormDesc.trim(),
+        addFormAssigneeIds[0] || '',
+        addFormPriority,
+        addFormAssigneeIds,
+        addFormTags,
+        finalDueDate,
+        addFormTargetColumnId || null
+      );
+
       setAddTaskColumnId(null);
       setAddFormTitle('');
       setAddFormDesc('');
-      setAddFormAssignee('');
+      setAddFormAssigneeIds([]);
+      setAddFormTags([]);
+      setAddFormTimerType('none');
+      setAddFormDueDate('');
+      setAddFormDurationValue(15);
+      setAddFormDurationUnit('minutes');
+      setAddFormTargetColumnId('');
+      setAddFormPriority('medium');
     } catch (err: any) {
       alert('Erro ao adicionar tarefa: ' + err.message);
     } finally {
@@ -324,12 +390,39 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
     if (!editingTask || !editFormTitle.trim()) return;
     setIsSavingEditTask(true);
     try {
+      let finalDueDate: Date | null = null;
+      if (editFormTimerType === 'datetime' && editFormDueDate) {
+        finalDueDate = new Date(editFormDueDate);
+      } else if (editFormTimerType === 'duration' && editFormDurationValue > 0) {
+        const multiplier = editFormDurationUnit === 'hours' ? 60 * 60 * 1000 : 60 * 1000;
+        finalDueDate = new Date(Date.now() + editFormDurationValue * multiplier);
+      } else if (editingTask.dueDate && editFormTimerType !== 'none') {
+        // preserve existing if they didn't touch it but type is selected
+        finalDueDate = new Date(editingTask.dueDate);
+      }
+
       await kanbanService.updateTask(projectId, editingTask.id, {
         title: editFormTitle.trim(),
         description: editFormDesc.trim(),
-        assigneeId: editFormAssignee
+        assigneeId: editFormAssigneeIds[0] || null,
+        assigneeIds: editFormAssigneeIds,
+        tags: editFormTags,
+        dueDate: finalDueDate,
+        targetColumnId: editFormTargetColumnId || null,
+        priority: editFormPriority
       });
+
       setEditingTask(null);
+      setEditFormTitle('');
+      setEditFormDesc('');
+      setEditFormAssigneeIds([]);
+      setEditFormTags([]);
+      setEditFormTimerType('none');
+      setEditFormDueDate('');
+      setEditFormDurationValue(15);
+      setEditFormDurationUnit('minutes');
+      setEditFormTargetColumnId('');
+      setEditFormPriority('');
     } catch (err: any) {
       alert('Erro ao editar tarefa: ' + err.message);
     } finally {
@@ -514,13 +607,76 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
             />
           </div>
 
-          {(filterColumnId !== 'all' || filterAssigneeId !== 'all') && (
+          <div className="flex flex-col gap-1 min-w-[150px]">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">Prioridade</span>
+            <SearchableSelect
+              options={[
+                { value: 'all', label: 'Qualquer Prioridade' },
+                { value: 'low', label: '🟢 Baixa' },
+                { value: 'medium', label: '🟡 Média' },
+                { value: 'high', label: '🔴 Alta' }
+              ]}
+              value={filterPriority}
+              onChange={setFilterPriority}
+              placeholder="Minha Prioridade"
+              searchPlaceholder="Prioridade..."
+            />
+          </div>
+
+          <div className="flex flex-col gap-1 min-w-[150px]">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">Tag</span>
+            <SearchableSelect
+              options={[
+                { value: 'all', label: 'Qualquer Tag' },
+                ...projectTags.map(tag => ({ value: tag, label: `#${tag}` }))
+              ]}
+              value={filterTag}
+              onChange={setFilterTag}
+              placeholder="Selecionar Tag"
+              searchPlaceholder="Tag..."
+            />
+          </div>
+
+          <div className="flex flex-col gap-1 min-w-[150px]">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">Timer</span>
+            <SearchableSelect
+              options={[
+                { value: 'all', label: 'Qualquer Status' },
+                { value: 'has-timer', label: '⏱️ Com Timer' },
+                { value: 'no-timer', label: '🚫 Sem Timer' },
+                { value: 'near', label: '⚠️ Perto do Fim (<15m)' },
+                { value: 'expired', label: '🚨 Tempo Expirado' },
+                { value: 'completed', label: '🎉 Meta Atingida' },
+              ]}
+              value={filterTimer}
+              onChange={setFilterTimer}
+              placeholder="Minhas Datas"
+              searchPlaceholder="Timer..."
+            />
+          </div>
+
+          <div className="flex flex-col gap-1 min-w-[200px] flex-grow sm:flex-grow-0">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">Buscar por texto</span>
+            <input
+              type="text"
+              placeholder="Pesquisar título/descrição..."
+              value={filterSearchTerm}
+              onChange={e => setFilterSearchTerm(e.target.value)}
+              className={`w-full text-xs px-3.5 py-1.5 h-8.5 rounded-md outline-none transition-all placeholder:text-zinc-500 border ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
+            />
+          </div>
+
+          {(filterColumnId !== 'all' || filterAssigneeId !== 'all' || filterSearchTerm !== '' || filterPriority !== 'all' || filterTag !== 'all' || filterTimer !== 'all') && (
             <button
               onClick={() => {
                 setFilterColumnId('all');
                 setFilterAssigneeId('all');
+                setFilterSearchTerm('');
+                setFilterPriority('all');
+                setFilterTag('all');
+                setFilterTimer('all');
               }}
-              className="text-[9px] font-semibold tracking-wider font-mono uppercase text-rose-450 hover:underline cursor-pointer mt-4"
+              className="text-[9px] font-semibold tracking-wider font-mono uppercase text-rose-500 hover:text-rose-600 hover:underline cursor-pointer md:mt-4"
             >
               Limpar Filtros
             </button>
@@ -541,19 +697,51 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
             setEditingTask(task);
             setEditFormTitle(task?.title || '');
             setEditFormDesc(task?.description || '');
-            setEditFormAssignee(task?.assigneeId || '');
+            setEditFormAssigneeIds(task?.assigneeIds || (task?.assigneeId ? [task.assigneeId] : []));
+            setEditFormTags(task?.tags || []);
+            setEditFormTimerType(task?.dueDate ? 'datetime' : 'none');
+            try {
+              // Convert Timestamp or JS Date safely
+              const dateVal = task?.dueDate;
+              if (dateVal) {
+                const dateObj = (dateVal as any).toDate ? (dateVal as any).toDate() : new Date(dateVal);
+                // Adjust to local ISO datetime-local input format
+                const tzo = dateObj.getTimezoneOffset() * 60000;
+                const localISOTime = (new Date(dateObj.getTime() - tzo)).toISOString().slice(0, 16);
+                setEditFormDueDate(localISOTime);
+              } else {
+                setEditFormDueDate('');
+              }
+            } catch (e) {
+              setEditFormDueDate('');
+            }
+            setEditFormTargetColumnId(task?.targetColumnId || '');
+            setEditFormPriority(task?.priority || 'medium');
           }}
           onDeleteColumnClick={(col) => setColumnToDelete(col)}
           onCardClick={(task) => setViewingTask(task)}
+          onAddTaskClick={(colId) => {
+            setAddTaskColumnId(colId);
+            setAddFormAssigneeIds([]);
+            setAddFormTags([]);
+            setAddFormTimerType('none');
+            setAddFormDueDate('');
+            setAddFormTargetColumnId('');
+            setAddFormPriority('medium');
+          }}
           filterColumnId={filterColumnId}
           filterAssigneeId={filterAssigneeId}
+          filterSearchTerm={filterSearchTerm}
+          filterPriority={filterPriority}
+          filterTag={filterTag}
+          filterTimer={filterTimer}
         />
       </div>
 
       {/* MODAL: MEMBROS DO PROJETO */}
       {isMembersOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`w-full max-w-lg rounded-xl shadow-xl relative overflow-hidden flex flex-col max-h-[85vh] transition-all border ${styles.cardBgClass} ${styles.borderClass}`}>
+          <div className={`w-full max-w-lg rounded-xl shadow-xl relative overflow-visible flex flex-col max-h-[85vh] transition-all border ${styles.cardBgClass} ${styles.borderClass}`}>
             
             {/* Modal Header */}
             <div className={`p-5 flex items-center justify-between border-b ${styles.borderClass}`}>
@@ -690,7 +878,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
                     <input 
                       type="text"
-                      placeholder="Pesquisar usuários cadastrados no Velox..."
+                      placeholder="Pesquisar usuários cadastrados no Nexion..."
                       value={addSearchTerm}
                       onChange={e => setAddSearchTerm(e.target.value)}
                       className={`w-full text-xs pl-9 pr-4 py-2 border rounded-md outline-none transition-all ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
@@ -864,7 +1052,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
                   setAddTaskColumnId(contextMenu.targetId);
                   setAddFormTitle('');
                   setAddFormDesc('');
-                  setAddFormAssignee(user?.uid || '');
+                  setAddFormAssigneeIds(user?.uid ? [user.uid] : []);
                   setContextMenu(null);
                 }}
                 className={`w-full text-left px-3 py-2 text-[10.5px] rounded font-semibold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-colors ${
@@ -881,7 +1069,26 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
                     setEditingTask(contextMenu.task);
                     setEditFormTitle(contextMenu.task?.title || '');
                     setEditFormDesc(contextMenu.task?.description || '');
-                    setEditFormAssignee(contextMenu.task?.assigneeId || '');
+                    setEditFormAssigneeIds(contextMenu.task?.assigneeIds || (contextMenu.task?.assigneeId ? [contextMenu.task.assigneeId] : []));
+                    setEditFormTags(contextMenu.task?.tags || []);
+                    setEditFormTimerType(contextMenu.task?.dueDate ? 'datetime' : 'none');
+                    try {
+                      // Convert Timestamp or JS Date safely
+                      const dateVal = contextMenu.task?.dueDate;
+                      if (dateVal) {
+                        const dateObj = (dateVal as any).toDate ? (dateVal as any).toDate() : new Date(dateVal);
+                        // Adjust to local ISO datetime-local input format
+                        const tzo = dateObj.getTimezoneOffset() * 60000;
+                        const localISOTime = (new Date(dateObj.getTime() - tzo)).toISOString().slice(0, 16);
+                        setEditFormDueDate(localISOTime);
+                      } else {
+                        setEditFormDueDate('');
+                      }
+                    } catch (e) {
+                      setEditFormDueDate('');
+                    }
+                    setEditFormTargetColumnId(contextMenu.task?.targetColumnId || '');
+                    setEditFormPriority(contextMenu.task?.priority || 'medium');
                     setContextMenu(null);
                   }}
                   className={`w-full text-left px-3 py-2 text-[10.5px] rounded font-semibold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-colors ${
@@ -913,206 +1120,91 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
       )}
 
       {/* MODAL: CADASTRAR NOVA TAREFA NA COLUNA */}
-      {addTaskColumnId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`w-full max-w-md rounded-xl shadow-xl relative overflow-hidden flex flex-col border transition-all ${styles.cardBgClass} ${styles.borderClass}`}>
-            
-            <div className={`p-5 flex items-center justify-between border-b ${styles.borderClass}`}>
-              <div className="flex items-center gap-2">
-                <Plus className={`w-4 h-4 ${styles.accentColorClass}`} />
-                <h3 className={`text-sm font-bold uppercase tracking-wider font-mono ${theme === 'light' ? 'text-zinc-900' : 'text-zinc-100'}`}>
-                  Criar Nova Task
-                </h3>
-              </div>
-              <button 
-                onClick={() => setAddTaskColumnId(null)}
-                className="p-1.5 rounded-lg hover:bg-zinc-500/10 text-zinc-500 hover:text-zinc-150 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      <AddTaskModal
+        isOpen={!!addTaskColumnId}
+        onClose={() => setAddTaskColumnId(null)}
+        members={projectMembers}
+        columns={useKanbanStore.getState().columns}
+        isSaving={isSavingNewTask}
+        theme={theme}
+        styles={styles}
+        onSubmit={async (data) => {
+          setIsSavingNewTask(true);
+          try {
+            const relevantTasks = useKanbanStore.getState().tasks.filter(t => t.columnId === addTaskColumnId);
+            const order = relevantTasks.length * 1000;
 
-            <form onSubmit={handleAddTaskSubmit} className="p-5 flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Título</label>
-                <input
-                  required
-                  autoFocus
-                  type="text"
-                  placeholder="Defina o título da sua task..."
-                  value={addFormTitle}
-                  onChange={e => setAddFormTitle(e.target.value)}
-                  className={`w-full text-xs rounded-md px-3.5 py-2 placeholder:text-zinc-500 outline-none transition-all border ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
-                />
-              </div>
+            let finalDueDate: Date | null = null;
+            if (data.timerType === 'datetime' && data.dueDate) {
+              finalDueDate = new Date(data.dueDate);
+            } else if (data.timerType === 'duration' && data.durationValue > 0) {
+              const multiplier = data.durationUnit === 'hours' ? 60 * 60 * 1000 : 60 * 1000;
+              finalDueDate = new Date(Date.now() + data.durationValue * multiplier);
+            }
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Descrição (Opcional)</label>
-                <textarea
-                  placeholder="Adicione detalhes ou requisitos da task..."
-                  rows={3.5}
-                  value={addFormDesc}
-                  onChange={e => setAddFormDesc(e.target.value)}
-                  className={`w-full text-xs rounded-md px-3.5 py-2 placeholder:text-zinc-500 outline-none transition-all resize-none border ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Responsável</label>
-                <SearchableSelect
-                  options={[
-                    { value: '', label: 'Sem responsável' },
-                    ...projectMembers.map(m => ({
-                      value: m.id,
-                      label: m.name || m.email,
-                      sublabel: m.email,
-                      avatar: m.photoURL ? (
-                        <img src={m.photoURL} alt="" className="w-4 h-4 rounded-full" />
-                      ) : (
-                        <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold ${getAvatarColor(m.id)}`}>
-                          {(m.name ? m.name[0] : m.email[0]).toUpperCase()}
-                        </div>
-                      )
-                    }))
-                  ]}
-                  value={addFormAssignee}
-                  onChange={setAddFormAssignee}
-                  placeholder="Selecionar responsável"
-                  searchPlaceholder="Pesquisar..."
-                />
-              </div>
-
-              <div className={`pt-4 border-t flex justify-end gap-2.5 mt-2 ${styles.borderClass}`}>
-                <button
-                  type="button"
-                  onClick={() => setAddTaskColumnId(null)}
-                  className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-md border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingNewTask}
-                  className={`h-8.5 px-5 text-xs font-bold uppercase tracking-wider rounded-md flex items-center gap-1.5 cursor-pointer ${styles.btnPrimaryClass}`}
-                >
-                  {isSavingNewTask ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Salvando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Salvar Task</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            await kanbanService.addTask(
+              projectId,
+              addTaskColumnId!,
+              data.title,
+              order,
+              data.description,
+              data.assigneeIds[0] || '',
+              data.priority,
+              data.assigneeIds,
+              data.tags,
+              finalDueDate,
+              data.targetColumnId || null,
+              data.subtasks
+            );
+            setAddTaskColumnId(null);
+          } catch (err: any) {
+            alert('Erro ao adicionar tarefa: ' + err.message);
+          } finally {
+            setIsSavingNewTask(false);
+          }
+        }}
+      />
 
       {/* MODAL: EDITAR TAREFA */}
-      {editingTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`w-full max-w-md rounded-xl shadow-xl relative overflow-hidden flex flex-col border transition-all ${styles.cardBgClass} ${styles.borderClass}`}>
-            
-            <div className={`p-5 flex items-center justify-between border-b ${styles.borderClass}`}>
-              <div className="flex items-center gap-2">
-                <Pencil className={`w-4 h-4 ${styles.accentColorClass}`} />
-                <h3 className={`text-sm font-bold uppercase tracking-wider font-mono ${theme === 'light' ? 'text-zinc-900' : 'text-zinc-100'}`}>
-                  Editar Task
-                </h3>
-              </div>
-              <button 
-                onClick={() => setEditingTask(null)}
-                className="p-1.5 rounded-lg hover:bg-zinc-500/10 text-zinc-500 hover:text-zinc-150 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      <EditTaskModal
+        isOpen={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        task={editingTask}
+        members={projectMembers}
+        columns={useKanbanStore.getState().columns}
+        isSaving={isSavingEditTask}
+        theme={theme}
+        styles={styles}
+        onSubmit={async (data) => {
+          setIsSavingEditTask(true);
+          try {
+            let finalDueDate: Date | null = null;
+            if (data.timerType === 'datetime' && data.dueDate) {
+              finalDueDate = new Date(data.dueDate);
+            } else if (data.timerType === 'duration' && data.durationValue > 0) {
+              const multiplier = data.durationUnit === 'hours' ? 60 * 60 * 1000 : 60 * 1050;
+              finalDueDate = new Date(Date.now() + data.durationValue * multiplier);
+            }
 
-            <form onSubmit={handleEditTaskSubmit} className="p-5 flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Título</label>
-                <input
-                  required
-                  autoFocus
-                  type="text"
-                  placeholder="Defina o título da sua task..."
-                  value={editFormTitle}
-                  onChange={e => setEditFormTitle(e.target.value)}
-                  className={`w-full text-xs rounded-md px-3.5 py-2 placeholder:text-zinc-500 outline-none transition-all border ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Descrição (Opcional)</label>
-                <textarea
-                  placeholder="Adicione detalhes ou requisitos da task..."
-                  rows={3.5}
-                  value={editFormDesc}
-                  onChange={e => setEditFormDesc(e.target.value)}
-                  className={`w-full text-xs rounded-md px-3.5 py-2 placeholder:text-zinc-500 outline-none transition-all resize-none border ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Responsável</label>
-                <SearchableSelect
-                  options={[
-                    { value: '', label: 'Sem responsável' },
-                    ...projectMembers.map(m => ({
-                      value: m.id,
-                      label: m.name || m.email,
-                      sublabel: m.email,
-                      avatar: m.photoURL ? (
-                        <img src={m.photoURL} alt="" className="w-4 h-4 rounded-full" />
-                      ) : (
-                        <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold ${getAvatarColor(m.id)}`}>
-                          {(m.name ? m.name[0] : m.email[0]).toUpperCase()}
-                        </div>
-                      )
-                    }))
-                  ]}
-                  value={editFormAssignee}
-                  onChange={setEditFormAssignee}
-                  placeholder="Selecionar responsável"
-                  searchPlaceholder="Pesquisar..."
-                />
-              </div>
-
-              <div className={`pt-4 border-t flex justify-end gap-2.5 mt-2 ${styles.borderClass}`}>
-                <button
-                  type="button"
-                  onClick={() => setEditingTask(null)}
-                  className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-md border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingEditTask}
-                  className={`h-8.5 px-5 text-xs font-bold uppercase tracking-wider rounded-md flex items-center gap-1.5 cursor-pointer ${styles.btnPrimaryClass}`}
-                >
-                  {isSavingEditTask ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Salvando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Atualizar Task</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            await kanbanService.updateTask(projectId, editingTask.id, {
+              title: data.title,
+              description: data.description,
+              assigneeId: data.assigneeIds[0] || null,
+              assigneeIds: data.assigneeIds,
+              tags: data.tags,
+              dueDate: finalDueDate,
+              targetColumnId: data.targetColumnId || null,
+              priority: data.priority,
+              subtasks: data.subtasks
+            });
+            setEditingTask(null);
+          } catch (err: any) {
+            alert('Erro ao editar tarefa: ' + err.message);
+          } finally {
+            setIsSavingEditTask(false);
+          }
+        }}
+      />
 
       {/* SCREEN POPUP CONFIRMATION TO REPLICATE COMPREHENSIVE ON-SCREEN MODAL CONFIRM */}
       {taskToDelete && (
@@ -1150,7 +1242,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
               <button 
                 disabled={isDeletingTask}
                 onClick={executeDeleteTask}
-                className="px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider bg-rose-650 hover:bg-rose-600 text-white transition-all cursor-pointer flex items-center gap-1"
+                className="px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white transition-all cursor-pointer flex items-center gap-1"
               >
                 {isDeletingTask ? (
                   <>
@@ -1202,7 +1294,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
               <button 
                 disabled={isDeletingColumn}
                 onClick={executeDeleteColumn}
-                className="px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider bg-rose-650 hover:bg-rose-600 text-white transition-all cursor-pointer flex items-center gap-1"
+                className="px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white transition-all cursor-pointer flex items-center gap-1"
               >
                 {isDeletingColumn ? (
                   <>
@@ -1220,13 +1312,18 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
 
       {/* MODAL: EXIBIR INFORMAÇÕES DETALHADAS DA TASK */}
       {viewingTask && (() => {
-        const assignee = projectMembers.find(m => m.id === viewingTask.assigneeId);
+        // Safe arrays
+        const assigneeIds = viewingTask.assigneeIds || (viewingTask.assigneeId ? [viewingTask.assigneeId] : []);
+        const assignees = projectMembers.filter(m => assigneeIds.includes(m.id));
+        const tags = viewingTask.tags || [];
+
         const columnsList = useKanbanStore.getState().columns;
         const currentColumn = columnsList.find(c => c.id === viewingTask.columnId);
+        const targetColumn = viewingTask.targetColumnId ? columnsList.find(c => c.id === viewingTask.targetColumnId) : null;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className={`w-full max-w-lg rounded-xl shadow-xl relative overflow-hidden flex flex-col border transition-all ${styles.cardBgClass} ${styles.borderClass}`}>
+            <div className={`w-full max-w-lg rounded-xl shadow-xl relative overflow-visible flex flex-col border transition-all ${styles.cardBgClass} ${styles.borderClass}`}>
               
               <div className={`p-5 flex items-center justify-between border-b ${styles.borderClass}`}>
                 <div className="flex items-center gap-2">
@@ -1243,7 +1340,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
                 </button>
               </div>
 
-              <div className="p-5 flex flex-col gap-5">
+              <div className="p-5 flex flex-col gap-5 max-h-[75vh] overflow-y-auto">
                 <div>
                   <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono mb-1">Título</h4>
                   <p className={`text-sm font-bold tracking-tight ${theme === 'light' ? 'text-zinc-900' : 'text-zinc-100'}`}>
@@ -1260,47 +1357,163 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
                   </div>
                 )}
 
+                {/* Sub-grid of details */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Responsáveis */}
                   <div>
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono mb-1.5 font-semibold">Responsável</h4>
-                    {assignee ? (
-                      <div className="flex items-center gap-2.5">
-                        {assignee.photoURL ? (
-                          <img src={assignee.photoURL} alt="" className="w-6 h-6 rounded-full" />
-                        ) : (
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black border uppercase ${getAvatarColor(assignee.id)}`}>
-                            {(assignee.name ? assignee.name[0] : assignee.email[0]).toUpperCase()}
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono mb-1.5 font-semibold">Responsáveis</h4>
+                    {assignees.length > 0 ? (
+                      <div className="flex flex-col gap-2">
+                        {assignees.map((m) => (
+                          <div key={m.id} className="flex items-center gap-2.5 font-normal">
+                            {m.photoURL ? (
+                              <img src={m.photoURL} alt="" className="w-5 h-5 rounded-full" />
+                            ) : (
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black border uppercase ${getAvatarColor(m.id)}`}>
+                                {(m.name ? m.name[0] : m.email[0]).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0 font-normal">
+                              <p className={`text-xs font-semibold truncate ${theme === 'light' ? 'text-zinc-800' : 'text-zinc-350'}`}>
+                                {m.name || m.email}
+                              </p>
+                            </div>
                           </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className={`text-xs font-semibold truncate ${theme === 'light' ? 'text-zinc-800' : 'text-zinc-350'}`}>{assignee.name || assignee.email}</p>
-                          <p className="text-[9px] text-zinc-500 truncate">{assignee.email}</p>
-                        </div>
+                        ))}
                       </div>
                     ) : (
                       <p className="text-xs text-zinc-500 italic">Sem responsável atribuído</p>
                     )}
                   </div>
 
-                  <div>
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono mb-1.5 font-semibold">Mudar de Coluna</h4>
-                    <div className="text-xs">
-                      <SearchableSelect
-                        options={columnsList.map(c => ({ value: c.id, label: c.name }))}
-                        value={viewingTask.columnId}
-                        onChange={async (newColumnId) => {
-                          try {
-                            const moveTask = useKanbanStore.getState().moveTask;
-                            const colTasks = useKanbanStore.getState().tasks.filter(t => t.columnId === newColumnId);
-                            await moveTask(projectId, viewingTask.id, newColumnId, colTasks.length);
-                            setViewingTask({ ...viewingTask, columnId: newColumnId });
-                          } catch (err: any) {
-                            alert("Erro ao mover coluna: " + err.message);
-                          }
-                        }}
-                        placeholder="Mudar status de coluna"
-                      />
+                  {/* Prioridade e Objetivo */}
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono mb-1.5 font-semibold">Prioridade</h4>
+                      {viewingTask.priority ? (
+                        <div className="flex font-mono items-center">
+                          <span className={`text-[9.5px] uppercase tracking-wider rounded-md px-2.5 py-1 font-bold flex items-center gap-1.5 ${
+                            viewingTask.priority === 'high' 
+                              ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20' 
+                              : viewingTask.priority === 'medium'
+                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                          }`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                            <span>{viewingTask.priority === 'high' ? 'Alta' : viewingTask.priority === 'medium' ? 'Média' : 'Baixa'}</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-500 italic font-normal">Nenhuma definida</p>
+                      )}
                     </div>
+
+                    {targetColumn && (
+                      <div>
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono mb-1 font-semibold">Coluna Objetivo</h4>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/25 uppercase font-mono text-[9px] flex items-center gap-1">
+                            <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                            {targetColumn.name}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tags Section */}
+                {tags.length > 0 && (
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono mb-1.5">Tags</h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {tags.map((tag: string, idx: number) => (
+                        <span 
+                          key={idx}
+                          className="px-2 py-0.5 rounded text-[10px] font-mono border bg-zinc-500/10 text-zinc-300 border-zinc-700"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Subtasks Section */}
+                {viewingTask.subtasks && viewingTask.subtasks.length > 0 && (
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono mb-2">Subtasks</h4>
+                    <div className="flex flex-col gap-1.5">
+                      {viewingTask.subtasks.map((st: any, idx: number) => (
+                        <div key={st.id} className="flex items-center gap-2 p-2 rounded-md border bg-zinc-900/30 border-zinc-800/50">
+                          <input
+                            type="checkbox"
+                            checked={st.completed}
+                            onChange={async () => {
+                              const newSubtasks = [...viewingTask.subtasks];
+                              newSubtasks[idx] = { ...st, completed: !st.completed };
+                              
+                              // Update local state for immediate feedback
+                              setViewingTask({ ...viewingTask, subtasks: newSubtasks });
+                              
+                              // Update store temporarily
+                              const tasks = useKanbanStore.getState().tasks;
+                              const tIdx = tasks.findIndex(t => t.id === viewingTask.id);
+                              if (tIdx > -1) {
+                                const newTasks = [...tasks];
+                                newTasks[tIdx] = { ...newTasks[tIdx], subtasks: newSubtasks };
+                                useKanbanStore.getState().setTasks(newTasks);
+                              }
+
+                              try {
+                                await kanbanService.updateTask(projectId, viewingTask.id, {
+                                  title: viewingTask.title,
+                                  subtasks: newSubtasks
+                                });
+                              } catch (err) {
+                                console.error('Failed to update subtasks:', err);
+                              }
+                            }}
+                            className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-800/50 cursor-pointer"
+                          />
+                          <span className={`text-xs font-medium ${st.completed ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
+                            {st.title}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Deadlines Timer Status */}
+                {viewingTask.dueDate && (
+                  <div className={`p-3 rounded-lg border flex flex-col gap-1.5 ${styles.borderClass} bg-zinc-500/5`}>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">⏱️ Status do Prazo</h4>
+                    <p className="text-xs text-zinc-300 font-mono">
+                      Expira em: <span className="font-bold text-white">{new Date((viewingTask.dueDate as any).toDate ? (viewingTask.dueDate as any).toDate() : viewingTask.dueDate).toLocaleString()}</span>
+                    </p>
+                  </div>
+                )}
+
+                {/* Mudar Coluna Control */}
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono mb-1.5 font-semibold">Mover de Coluna</h4>
+                  <div className="text-xs">
+                    <SearchableSelect
+                      options={columnsList.map(c => ({ value: c.id, label: c.name }))}
+                      value={viewingTask.columnId}
+                      onChange={async (newColumnId) => {
+                        try {
+                          const moveTask = useKanbanStore.getState().moveTask;
+                          const colTasks = useKanbanStore.getState().tasks.filter(t => t.columnId === newColumnId);
+                          await moveTask(projectId, viewingTask.id, newColumnId, colTasks.length);
+                          setViewingTask({ ...viewingTask, columnId: newColumnId });
+                        } catch (err: any) {
+                          alert("Erro ao mover coluna: " + err.message);
+                        }
+                      }}
+                      placeholder="Mudar status de coluna"
+                    />
                   </div>
                 </div>
 
@@ -1314,9 +1527,26 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
                         setEditingTask(taskToEdit);
                         setEditFormTitle(taskToEdit?.title || '');
                         setEditFormDesc(taskToEdit?.description || '');
-                        setEditFormAssignee(taskToEdit?.assigneeId || '');
+                        setEditFormAssigneeIds(taskToEdit?.assigneeIds || (taskToEdit?.assigneeId ? [taskToEdit.assigneeId] : []));
+                        setEditFormTags(taskToEdit?.tags || []);
+                        setEditFormTimerType(taskToEdit?.dueDate ? 'datetime' : 'none');
+                        try {
+                          const dateVal = taskToEdit?.dueDate;
+                          if (dateVal) {
+                            const dateObj = (dateVal as any).toDate ? (dateVal as any).toDate() : new Date(dateVal);
+                            const tzo = dateObj.getTimezoneOffset() * 60000;
+                            const localISOTime = (new Date(dateObj.getTime() - tzo)).toISOString().slice(0, 16);
+                            setEditFormDueDate(localISOTime);
+                          } else {
+                            setEditFormDueDate('');
+                          }
+                        } catch (e) {
+                          setEditFormDueDate('');
+                        }
+                        setEditFormTargetColumnId(taskToEdit?.targetColumnId || '');
+                        setEditFormPriority(taskToEdit?.priority || 'medium');
                       }}
-                      className="px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md border border-zinc-750 text-zinc-350 hover:text-white hover:bg-zinc-900 transition-all cursor-pointer flex items-center gap-1.5"
+                      className="px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md border border-zinc-750 text-zinc-350 hover:text-white hover:bg-zinc-900 transition-all cursor-pointer flex items-center gap-1.5 font-mono"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                       <span>Editar</span>
@@ -1330,7 +1560,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
                           setViewingTask(null);
                           setTaskToDelete(taskToDel);
                         }}
-                        className="px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md border border-rose-900/50 text-rose-450 hover:bg-rose-950/20 transition-all cursor-pointer flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md border border-rose-900/50 text-rose-450 hover:bg-rose-950/20 transition-all cursor-pointer flex items-center gap-1.5 font-mono"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Excluir</span>

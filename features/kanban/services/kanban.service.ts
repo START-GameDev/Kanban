@@ -26,16 +26,38 @@ export const kanbanService = {
       orderBy('order', 'asc')
     );
     return onSnapshot(q, (snapshot) => {
-      const tasks = snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      })) as Task[];
+      const tasks = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return { 
+          id: doc.id, 
+          ...d,
+          createdAt: d.createdAt?.toDate() || new Date(),
+          dueDate: d.dueDate?.toDate() || null
+        } as Task;
+      });
       callback(tasks);
     }, (error) => {
       console.error("Erro na escuta das tarefas:", error);
       if (onError) onError(error);
     });
+  },
+
+  subscribeToTags(projectId: string, callback: (tags: string[]) => void, onError?: (err: any) => void) {
+    const q = query(collection(db, 'projects', projectId, 'tags'));
+    return onSnapshot(q, (snapshot) => {
+      const tags = snapshot.docs.map(doc => doc.id).sort();
+      callback(tags);
+    }, (error) => {
+      console.error("Erro na escuta das tags:", error);
+      if (onError) onError(error);
+    });
+  },
+
+  async registerTag(projectId: string, tag: string) {
+    const cleanTag = tag.trim();
+    if (!cleanTag) return;
+    const ref = doc(db, 'projects', projectId, 'tags', cleanTag);
+    await setDoc(ref, { createdAt: new Date() });
   },
 
   async getProjectMembers(projectId: string) {
@@ -121,24 +143,79 @@ export const kanbanService = {
     await deleteDoc(ref);
   },
 
-  async updateTask(projectId: string, taskId: string, fields: { title: string; description?: string | null; assigneeId?: string | null }) {
+  async updateTask(
+    projectId: string, 
+    taskId: string, 
+    fields: { 
+      title: string; 
+      description?: string | null; 
+      assigneeId?: string | null; 
+      assigneeIds?: string[];
+      tags?: string[];
+      dueDate?: Date | null;
+      targetColumnId?: string | null;
+      priority?: string | null;
+      subtasks?: any[];
+    }
+  ) {
     const ref = doc(db, 'projects', projectId, 'tasks', taskId);
-    await updateDoc(ref, {
+    const data: any = {
       title: fields.title,
       description: fields.description || null,
-      assigneeId: fields.assigneeId || null
-    });
+      assigneeId: fields.assigneeId || null,
+    };
+    if (fields.assigneeIds !== undefined) data.assigneeIds = fields.assigneeIds;
+    if (fields.subtasks !== undefined) data.subtasks = fields.subtasks;
+    if (fields.tags !== undefined) {
+      data.tags = fields.tags;
+      // Registrar tags no banco em background
+      for (const t of fields.tags) {
+        this.registerTag(projectId, t).catch(console.error);
+      }
+    }
+    if (fields.dueDate !== undefined) data.dueDate = fields.dueDate || null;
+    if (fields.targetColumnId !== undefined) data.targetColumnId = fields.targetColumnId || null;
+    if (fields.priority !== undefined) {
+      data.priority = fields.priority || null;
+    }
+    await updateDoc(ref, data);
   },
 
-  async addTask(projectId: string, columnId: string, title: string, order: number, description?: string, assigneeId?: string) {
-    await addDoc(collection(db, 'projects', projectId, 'tasks'), {
+  async addTask(
+    projectId: string, 
+    columnId: string, 
+    title: string, 
+    order: number, 
+    description?: string, 
+    assigneeId?: string, 
+    priority?: string,
+    assigneeIds?: string[],
+    tags?: string[],
+    dueDate?: Date | null,
+    targetColumnId?: string | null,
+    subtasks?: any[]
+  ) {
+    const data: any = {
       title,
       description: description || null,
       assigneeId: assigneeId || null,
+      assigneeIds: assigneeIds || [],
+      tags: tags || [],
+      dueDate: dueDate || null,
+      targetColumnId: targetColumnId || null,
       columnId,
       order,
+      priority: priority || null,
+      subtasks: subtasks || [],
       createdAt: new Date()
-    });
+    };
+    await addDoc(collection(db, 'projects', projectId, 'tasks'), data);
+
+    if (tags && tags.length > 0) {
+      for (const t of tags) {
+        this.registerTag(projectId, t).catch(console.error);
+      }
+    }
   },
 
   async updateTaskPosition(projectId: string, taskId: string, newColumnId: string, newOrder: number) {

@@ -12,34 +12,12 @@ import {
   useSensor,
   useSensors
 } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useState, useMemo } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { useAuth } from '@/providers/auth-provider';
 import { useTheme } from '@/providers/theme-provider';
 import { useDroppable } from '@dnd-kit/core';
 import { TaskCard } from './task-card';
-import { SearchableSelect } from '@/components/ui/searchable-select';
-
-const colors = [
-  'bg-emerald-500/15 text-emerald-600 border-emerald-550/25 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
-  'bg-rose-500/15 text-rose-600 border-rose-550/25 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20',
-  'bg-sky-500/15 text-sky-600 border-sky-550/25 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20',
-  'bg-amber-500/15 text-amber-600 border-amber-550/25 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
-  'bg-violet-500/15 text-violet-600 border-violet-550/25 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20',
-  'bg-fuchsia-500/15 text-fuchsia-600 border-fuchsia-550/25 dark:bg-fuchsia-500/10 dark:text-fuchsia-400 dark:border-fuchsia-500/20',
-  'bg-teal-500/15 text-teal-600 border-teal-550/25 dark:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/20',
-  'bg-orange-500/15 text-orange-600 border-orange-550/25 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20',
-];
-
-const getAvatarColor = (userId: string) => {
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
-};
 
 function ColumnView({ 
   column, 
@@ -53,6 +31,7 @@ function ColumnView({
   onEditTaskClick,
   onDeleteColumnClick,
   onCardClick,
+  onAddTaskClick,
 }: { 
   column: Column; 
   tasks: Task[]; 
@@ -65,14 +44,8 @@ function ColumnView({
   onEditTaskClick?: (task: Task) => void;
   onDeleteColumnClick?: (column: Column) => void;
   onCardClick?: (task: Task) => void;
+  onAddTaskClick?: (columnId: string) => void;
 }) {
-  const [isAddingTask, setIsAddingTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskDesc, setNewTaskDesc] = useState('');
-  
-  const { user } = useAuth();
-  const [newTaskAssignee, setNewTaskAssignee] = useState(user?.uid || '');
-  
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(column.name);
   const { styles, theme } = useTheme();
@@ -82,23 +55,6 @@ function ColumnView({
     data: { type: 'Column', column },
     disabled: isReadOnly
   });
-
-  const handleAddTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) return;
-
-    try {
-      const order = tasks.length * 1000;
-      await kanbanService.addTask(projectId, column.id, newTaskTitle.trim(), order, newTaskDesc.trim(), newTaskAssignee);
-      setNewTaskTitle('');
-      setNewTaskDesc('');
-      setNewTaskAssignee(user?.uid || '');
-      setIsAddingTask(false);
-    } catch (error: any) {
-      console.error(error);
-      alert("Erro ao adicionar tarefa: " + error.message);
-    }
-  };
 
   const handleEditColumn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,9 +132,9 @@ function ColumnView({
             </button>
             <button 
               className={`p-1 rounded ml-1 cursor-pointer transition-colors ${
-                theme === 'light' ? 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200' : 'text-zinc-350 hover:text-white hover:bg-zinc-800'
+                theme === 'light' ? 'text-zinc-650 hover:text-zinc-900 hover:bg-zinc-200' : 'text-zinc-350 hover:text-white hover:bg-zinc-800'
               }`} 
-              onClick={() => setIsAddingTask(true)}
+              onClick={() => onAddTaskClick && onAddTaskClick(column.id)}
               title="Adicionar tarefa nesta coluna"
             >
               <Plus className="w-3.5 h-3.5 cursor-pointer animate-in duration-100" />
@@ -203,67 +159,6 @@ function ColumnView({
             />
           ))}
         </SortableContext>
-
-        {isAddingTask && !isReadOnly && (
-          <form onSubmit={handleAddTask} className={`p-4 flex flex-col gap-3 rounded-md border duration-150 animate-in fade-in zoom-in-95 ${
-            theme === 'light' ? 'bg-white' : 'bg-black/40'
-          } ${styles.borderClass}`}>
-            <input
-              required
-              autoFocus
-              value={newTaskTitle}
-              onChange={e => setNewTaskTitle(e.target.value)}
-              placeholder="Título da tarefa..."
-              className={`text-xs rounded-md px-3 py-1.5 placeholder:text-zinc-400 outline-none transition-all border ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
-            />
-            <textarea
-              value={newTaskDesc}
-              onChange={e => setNewTaskDesc(e.target.value)}
-              placeholder="Descrição (opcional)..."
-              rows={2}
-              className={`w-full text-xs rounded-md px-3 py-1.5 resize-none placeholder:text-zinc-400 outline-none transition-all border ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
-            />
-            <div className="flex flex-col gap-1">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">Responsável</span>
-              <SearchableSelect
-                options={[
-                  { value: '', label: 'Sem responsável' },
-                  ...members.map(m => ({
-                    value: m.id,
-                    label: m.name || m.email,
-                    sublabel: m.email,
-                    avatar: m.photoURL ? (
-                      <img src={m.photoURL} alt="" className="w-4 h-4 rounded-full" />
-                    ) : (
-                      <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold ${getAvatarColor(m.id)}`}>
-                        {(m.name ? m.name[0] : m.email[0]).toUpperCase()}
-                      </div>
-                    )
-                  }))
-                ]}
-                value={newTaskAssignee}
-                onChange={setNewTaskAssignee}
-                placeholder="Selecionar responsável"
-                searchPlaceholder="Pesquisar..."
-              />
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-1">
-              <button 
-                type="button"
-                onClick={() => setIsAddingTask(false)}
-                className={`text-[9px] font-semibold uppercase tracking-wider py-1 px-2 text-zinc-450 hover:text-zinc-200 cursor-pointer`}
-              >
-                Voltar
-              </button>
-              <button 
-                type="submit"
-                className={`text-[9px] font-semibold uppercase tracking-wider py-1 px-3.5 rounded-md cursor-pointer ${styles.btnPrimaryClass}`}
-              >
-                Salvar
-              </button>
-            </div>
-          </form>
-        )}
       </div>
     </div>
   );
@@ -279,8 +174,13 @@ export function Board({
   onEditTaskClick,
   onDeleteColumnClick,
   onCardClick,
+  onAddTaskClick,
   filterColumnId = 'all',
   filterAssigneeId = 'all',
+  filterSearchTerm = '',
+  filterPriority = 'all',
+  filterTag = 'all',
+  filterTimer = 'all',
 }: { 
   projectId: string; 
   members: any[]; 
@@ -291,8 +191,13 @@ export function Board({
   onEditTaskClick?: (task: Task) => void;
   onDeleteColumnClick?: (column: Column) => void;
   onCardClick?: (task: Task) => void;
+  onAddTaskClick?: (columnId: string) => void;
   filterColumnId?: string;
   filterAssigneeId?: string;
+  filterSearchTerm?: string;
+  filterPriority?: string;
+  filterTag?: string;
+  filterTimer?: string;
 }) {
   const columns = useKanbanStore(s => s.columns);
   const rawTasks = useKanbanStore(s => s.tasks);
@@ -305,12 +210,56 @@ export function Board({
   const tasks = useMemo(() => {
     return rawTasks.filter(t => {
       const matchCol = !filterColumnId || filterColumnId === 'all' || t.columnId === filterColumnId;
-      const matchAssignee = !filterAssigneeId || filterAssigneeId === 'all'
-        || (filterAssigneeId === 'unassigned' && !t.assigneeId)
-        || t.assigneeId === filterAssigneeId;
-      return matchCol && matchAssignee;
+      
+      // Support filtering by assignee inside assigneeIds list too
+      let matchAssignee = false;
+      if (!filterAssigneeId || filterAssigneeId === 'all') {
+        matchAssignee = true;
+      } else if (filterAssigneeId === 'unassigned') {
+        const hasAssignees = t.assigneeIds && t.assigneeIds.length > 0;
+        matchAssignee = !t.assigneeId && !hasAssignees;
+      } else {
+        const inList = t.assigneeIds && t.assigneeIds.includes(filterAssigneeId);
+        matchAssignee = t.assigneeId === filterAssigneeId || !!inList;
+      }
+      
+      const matchPriority = !filterPriority || filterPriority === 'all' || t.priority === filterPriority;
+      
+      const cleanSearch = filterSearchTerm.trim().toLowerCase();
+      const matchSearch = !cleanSearch || 
+        t.title.toLowerCase().includes(cleanSearch) || 
+        (t.description && t.description.toLowerCase().includes(cleanSearch));
+
+      let matchTag = true;
+      if (filterTag && filterTag !== 'all') {
+        matchTag = t.tags ? t.tags.includes(filterTag) : false;
+      }
+
+      let matchTimer = true;
+      if (filterTimer && filterTimer !== 'all') {
+        if (filterTimer === 'has-timer') {
+          matchTimer = !!t.dueDate;
+        } else if (filterTimer === 'no-timer') {
+          matchTimer = !t.dueDate;
+        } else if (filterTimer === 'completed') {
+          matchTimer = !!t.dueDate && t.targetColumnId === t.columnId;
+        } else if (filterTimer === 'expired') {
+          // eslint-disable-next-line react-hooks/purity
+          matchTimer = !!t.dueDate && t.targetColumnId !== t.columnId && new Date(t.dueDate).getTime() < Date.now();
+        } else if (filterTimer === 'near') {
+          if (!t.dueDate || t.targetColumnId === t.columnId) {
+            matchTimer = false;
+          } else {
+            // eslint-disable-next-line react-hooks/purity
+            const diff = new Date(t.dueDate).getTime() - Date.now();
+            matchTimer = diff > 0 && diff <= 15 * 60 * 1000;
+          }
+        }
+      }
+        
+      return matchCol && matchAssignee && matchPriority && matchSearch && matchTag && matchTimer;
     });
-  }, [rawTasks, filterColumnId, filterAssigneeId]);
+  }, [rawTasks, filterColumnId, filterAssigneeId, filterPriority, filterSearchTerm, filterTag, filterTimer]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -370,6 +319,7 @@ export function Board({
             onEditTaskClick={onEditTaskClick}
             onDeleteColumnClick={onDeleteColumnClick}
             onCardClick={onCardClick}
+            onAddTaskClick={onAddTaskClick}
           />
         ))}
         {columns.length === 0 && (

@@ -131,15 +131,15 @@ const ThemeContext = createContext<ThemeContextType>({
 export const useTheme = () => useContext(ThemeContext);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeType>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('velox-theme') as ThemeType;
-      if (saved && THEMES[saved]) {
-        return saved;
-      }
+  const [theme, setThemeState] = useState<ThemeType>('vercel');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('velox-theme') as ThemeType;
+    if (saved && THEMES[saved]) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setThemeState(saved);
     }
-    return 'vercel';
-  });
+  }, []);
 
   const setTheme = (newTheme: ThemeType) => {
     setThemeState(newTheme);

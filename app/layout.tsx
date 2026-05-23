@@ -5,7 +5,7 @@ import { AuthProvider } from '@/providers/auth-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
 
 export const metadata: Metadata = {
-  title: 'Velox Kanban',
+  title: 'Nexion Kanban',
   description: 'Sistema de Kanban Real-time e Multi-usuário',
 };
 
