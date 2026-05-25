@@ -20,6 +20,7 @@ interface EditTaskModalProps {
     durationUnit: 'minutes' | 'hours';
     targetColumnId: string;
     subtasks: { id: string; title: string; description?: string; assigneeIds?: string[]; tags?: string[]; completed: boolean; }[];
+    color: string;
   }) => void;
   task: any;
   members: any[];
@@ -38,6 +39,16 @@ const colors = [
   'bg-fuchsia-500/15 text-fuchsia-600',
   'bg-teal-500/15 text-teal-600',
   'bg-orange-500/15 text-orange-600',
+];
+
+const TASK_COLORS = [
+  { id: 'default', name: 'Padrão', lightClass: 'bg-zinc-100 border-zinc-300 text-zinc-800', darkClass: 'bg-zinc-900 border-zinc-800 text-zinc-300' },
+  { id: 'red', name: 'Vermelho', lightClass: 'bg-rose-100 border-rose-300 text-rose-800', darkClass: 'bg-rose-950/40 border-rose-900 text-rose-300' },
+  { id: 'blue', name: 'Azul', lightClass: 'bg-sky-100 border-sky-300 text-sky-850', darkClass: 'bg-sky-950/40 border-sky-900 text-sky-300' },
+  { id: 'green', name: 'Verde', lightClass: 'bg-emerald-100 border-emerald-300 text-emerald-850', darkClass: 'bg-emerald-950/40 border-emerald-900 text-emerald-300' },
+  { id: 'yellow', name: 'Amarelo', lightClass: 'bg-amber-100 border-amber-300 text-amber-850', darkClass: 'bg-amber-950/40 border-amber-900 text-amber-300' },
+  { id: 'purple', name: 'Roxo', lightClass: 'bg-violet-100 border-violet-300 text-violet-850', darkClass: 'bg-violet-950/40 border-violet-900 text-violet-300' },
+  { id: 'teal', name: 'Teal', lightClass: 'bg-teal-100 border-teal-300 text-teal-850', darkClass: 'bg-teal-950/40 border-teal-900 text-teal-300' },
 ];
 
 const getAvatarColor = (userId: string) => {
@@ -62,6 +73,7 @@ export function EditTaskModal({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
+  const [color, setColor] = useState('default');
 
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
@@ -85,6 +97,7 @@ export function EditTaskModal({
       setAssigneeIds(task.assigneeIds || (task.assigneeId ? [task.assigneeId] : []));
       setTags(task.tags || []);
       setPriority(task.priority || 'medium');
+      setColor(task.color || 'default');
       setTargetColumnId(task.targetColumnId || '');
       setSubtasks(task.subtasks || []);
 
@@ -127,7 +140,8 @@ export function EditTaskModal({
       durationValue,
       durationUnit,
       targetColumnId,
-      subtasks
+      subtasks,
+      color,
     });
   };
 
@@ -210,6 +224,34 @@ export function EditTaskModal({
               onChange={e => setDescription(e.target.value)}
               className={`w-full text-xs rounded-md px-3.5 py-2 placeholder:text-zinc-500 outline-none transition-all resize-none border ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
             />
+          </div>
+
+          {/* Cor do Card */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-mono">Cor do Card</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {TASK_COLORS.map((tc) => (
+                <button
+                  key={tc.id}
+                  type="button"
+                  onClick={() => setColor(tc.id)}
+                  className={`w-7 h-7 rounded-full border-2 transition-all duration-150 relative cursor-pointer ${
+                    theme === 'light' ? tc.lightClass : tc.darkClass
+                  } ${
+                    color === tc.id 
+                      ? 'scale-110 ring-2 ring-zinc-400 border-white dark:border-black' 
+                      : 'hover:scale-105 border-transparent'
+                  }`}
+                  title={tc.name}
+                >
+                  {color === tc.id && (
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-zinc-800 dark:text-zinc-200">
+                      ✓
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Toolbar de Funcionalidades Extras */}

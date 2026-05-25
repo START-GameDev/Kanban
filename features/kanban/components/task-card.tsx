@@ -42,6 +42,44 @@ const getAvatarColor = (userId: string) => {
   return colors[index];
 };
 
+const getTaskColorClass = (color: string | undefined | null, theme: string, styles: any) => {
+  if (!color || color === 'default') {
+    return `${styles.cardBgClass} ${styles.borderClass}`;
+  }
+
+  const isLight = theme === 'light';
+  const isCyberpunk = theme === 'cyberpunk';
+
+  switch (color) {
+    case 'red':
+      if (isLight) return 'bg-rose-50/90 border-rose-250 text-rose-950';
+      if (isCyberpunk) return 'bg-[#1c080f]/75 border-rose-500/35 text-rose-200 shadow-[0_0_8px_rgba(244,63,94,0.08)]';
+      return 'bg-rose-950/15 border-rose-900/40 text-rose-200';
+    case 'blue':
+      if (isLight) return 'bg-sky-50/90 border-sky-250 text-sky-950';
+      if (isCyberpunk) return 'bg-[#08151c]/75 border-sky-500/35 text-sky-200 shadow-[0_0_8px_rgba(14,165,233,0.08)]';
+      return 'bg-sky-950/15 border-sky-900/40 text-sky-200';
+    case 'green':
+      if (isLight) return 'bg-emerald-50/90 border-emerald-250 text-emerald-950';
+      if (isCyberpunk) return 'bg-[#0a1c12]/75 border-emerald-500/35 text-emerald-200 shadow-[0_0_8px_rgba(16,185,129,0.08)]';
+      return 'bg-emerald-950/15 border-emerald-900/40 text-emerald-200';
+    case 'yellow':
+      if (isLight) return 'bg-amber-50/90 border-amber-250 text-amber-950';
+      if (isCyberpunk) return 'bg-[#1c1a08]/75 border-amber-500/35 text-amber-200 shadow-[0_0_8px_rgba(245,158,11,0.08)]';
+      return 'bg-amber-950/15 border-amber-900/40 text-amber-200';
+    case 'purple':
+      if (isLight) return 'bg-violet-50/90 border-violet-250 text-violet-950';
+      if (isCyberpunk) return 'bg-[#14081c]/75 border-violet-500/35 text-violet-200 shadow-[0_0_8px_rgba(168,85,247,0.08)]';
+      return 'bg-violet-950/15 border-violet-900/40 text-violet-200';
+    case 'teal':
+      if (isLight) return 'bg-teal-50/90 border-teal-250 text-teal-950';
+      if (isCyberpunk) return 'bg-[#081c19]/75 border-teal-500/35 text-teal-200 shadow-[0_0_8px_rgba(20,184,166,0.08)]';
+      return 'bg-teal-950/15 border-teal-900/40 text-teal-200';
+    default:
+      return `${styles.cardBgClass} ${styles.borderClass}`;
+  }
+};
+
 export function TaskCard({ task, members, projectId, isOverlay, isReadOnly, onContextMenu, onDeleteClick, onEditClick, onCardClick }: TaskCardProps) {
   const { styles, theme } = useTheme();
   
@@ -183,7 +221,7 @@ export function TaskCard({ task, members, projectId, isOverlay, isReadOnly, onCo
           onCardClick();
         }
       }}
-      className={`p-4 border rounded-md hover:shadow-sm duration-150 transition-all select-none relative group ${styles.cardBgClass} ${styles.borderClass} ${timerBorderClass} ${
+      className={`p-4 border rounded-md hover:shadow-sm duration-150 transition-all select-none relative group ${getTaskColorClass(task.color, theme, styles)} ${timerBorderClass} ${
         isReadOnly ? 'cursor-default hover:border-zinc-300 dark:hover:border-zinc-750' : 'cursor-grab active:cursor-grabbing hover:border-zinc-400 dark:hover:border-zinc-650'
       } ${
         isDragging ? 'opacity-25 border-dashed bg-black/50' : 'opacity-100'
@@ -247,12 +285,28 @@ export function TaskCard({ task, members, projectId, isOverlay, isReadOnly, onCo
         </p>
       )}
 
-      {task.subtasks && task.subtasks.length > 0 && (
-        <div className="flex items-center gap-1.5 mt-2.5 text-[9px] font-mono tracking-tight font-medium text-zinc-500">
-          <CheckSquare className="w-3.5 h-3.5" />
-          <span>{task.subtasks.filter(st => st.completed).length}/{task.subtasks.length} Subtasks</span>
-        </div>
-      )}
+      {task.subtasks && task.subtasks.length > 0 && (() => {
+        const completedCount = task.subtasks.filter(st => st.completed).length;
+        const totalCount = task.subtasks.length;
+        const percent = Math.round((completedCount / totalCount) * 100);
+        return (
+          <div className="mt-3.5 space-y-1.5 select-none">
+            <div className="flex items-center justify-between text-[9px] font-mono tracking-tight font-medium text-zinc-500">
+              <span className="flex items-center gap-1">
+                <CheckSquare className="w-3 h-3 text-zinc-400" />
+                <span>Progresso</span>
+              </span>
+              <span>{completedCount}/{totalCount} ({percent}%)</span>
+            </div>
+            <div className="w-full h-1 bg-zinc-200/50 dark:bg-zinc-800/40 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-emerald-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Render Tag Badges */}
       {task.tags && task.tags.length > 0 && (

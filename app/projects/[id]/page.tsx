@@ -110,6 +110,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterTag, setFilterTag] = useState<string>('all');
   const [filterTimer, setFilterTimer] = useState<string>('all');
+  const [filterColor, setFilterColor] = useState<string>('all');
   const [isFilterBarOpen, setIsFilterBarOpen] = useState(false);
 
   // Persistent Project Tags State
@@ -508,6 +509,27 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
             <span>Membros</span>
           </button>
 
+          {/* Minhas Tasks Quick Filter */}
+          {user && (
+            <button
+              onClick={() => {
+                if (filterAssigneeId === user.uid) {
+                  setFilterAssigneeId('all');
+                } else {
+                  setFilterAssigneeId(user.uid);
+                }
+              }}
+              className={`h-7 px-3.5 rounded-md flex items-center gap-1.5 transition-all text-[10px] uppercase font-semibold cursor-pointer border ${
+                filterAssigneeId === user.uid
+                  ? 'bg-[#10b981]/15 border-[#10b981]/30 text-[#10b981] font-extrabold shadow-[0_0_10px_rgba(16,185,129,0.1)]'
+                  : styles.btnSecondaryClass
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Minhas Tasks</span>
+            </button>
+          )}
+
           <button
             onClick={() => setIsFilterBarOpen(!isFilterBarOpen)}
             className={`h-7 px-3.5 rounded-md flex items-center gap-2 transition-all text-[10px] uppercase font-semibold cursor-pointer border ${
@@ -519,43 +541,6 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
             <Filter className="w-3.5 h-3.5" />
             <span>Filtrar</span>
           </button>
-
-          <div className={`h-4 w-px hidden sm:block mx-1 ${styles.borderClass}`}></div>
-
-          {canEditKanban && (
-            <>
-              {isAddingColumn ? (
-                <form onSubmit={handleCreateColumn} className="flex items-center gap-1.5 animate-in fade-in slide-in-from-right-3 duration-150">
-                  <input 
-                    autoFocus
-                    type="text" 
-                    value={newColumnName} 
-                    onChange={e => setNewColumnName(e.target.value)} 
-                    placeholder="Nome da coluna..." 
-                    className={`px-3 py-1 text-[10px] rounded-md border outline-none duration-155 w-36 ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
-                  />
-                  <button type="submit" className={`h-7 px-3 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${styles.btnPrimaryClass}`}>
-                    Salvar
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setIsAddingColumn(false)}
-                    className={`h-7 px-3 text-[10px] font-semibold uppercase tracking-wider rounded-md border transition-all ${styles.btnSecondaryClass}`}
-                  >
-                    Cancelar
-                  </button>
-                </form>
-              ) : (
-                <button 
-                  onClick={() => setIsAddingColumn(true)} 
-                  className={`h-7 px-3.5 rounded-md flex items-center gap-1.5 transition-all uppercase tracking-wider font-semibold text-[10px] ${styles.btnPrimaryClass}`}
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Nova Coluna</span>
-                </button>
-              )}
-            </>
-          )}
         </div>
       </div>
 
@@ -655,6 +640,26 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
             />
           </div>
 
+          <div className="flex flex-col gap-1 min-w-[150px]">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">Cor do Card</span>
+            <SearchableSelect
+              options={[
+                { value: 'all', label: 'Qualquer Cor' },
+                { value: 'default', label: 'Padrão (Neutro)' },
+                { value: 'red', label: '🔴 Vermelho' },
+                { value: 'blue', label: '🔵 Azul' },
+                { value: 'green', label: '🟢 Verde' },
+                { value: 'yellow', label: '🟡 Amarelo' },
+                { value: 'purple', label: '🟣 Roxo' },
+                { value: 'teal', label: '🟢 Teal' },
+              ]}
+              value={filterColor}
+              onChange={setFilterColor}
+              placeholder="Cor do Card"
+              searchPlaceholder="Filtrar cor..."
+            />
+          </div>
+
           <div className="flex flex-col gap-1 min-w-[200px] flex-grow sm:flex-grow-0">
             <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">Buscar por texto</span>
             <input
@@ -666,7 +671,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
             />
           </div>
 
-          {(filterColumnId !== 'all' || filterAssigneeId !== 'all' || filterSearchTerm !== '' || filterPriority !== 'all' || filterTag !== 'all' || filterTimer !== 'all') && (
+          {(filterColumnId !== 'all' || filterAssigneeId !== 'all' || filterSearchTerm !== '' || filterPriority !== 'all' || filterTag !== 'all' || filterTimer !== 'all' || filterColor !== 'all') && (
             <button
               onClick={() => {
                 setFilterColumnId('all');
@@ -675,6 +680,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
                 setFilterPriority('all');
                 setFilterTag('all');
                 setFilterTimer('all');
+                setFilterColor('all');
               }}
               className="text-[9px] font-semibold tracking-wider font-mono uppercase text-rose-500 hover:text-rose-600 hover:underline cursor-pointer md:mt-4"
             >
@@ -735,6 +741,7 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
           filterPriority={filterPriority}
           filterTag={filterTag}
           filterTimer={filterTimer}
+          filterColor={filterColor}
         />
       </div>
 
@@ -1154,7 +1161,8 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
               data.tags,
               finalDueDate,
               data.targetColumnId || null,
-              data.subtasks
+              data.subtasks,
+              data.color
             );
             setAddTaskColumnId(null);
           } catch (err: any) {
@@ -1195,7 +1203,8 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
               dueDate: finalDueDate,
               targetColumnId: data.targetColumnId || null,
               priority: data.priority,
-              subtasks: data.subtasks
+              subtasks: data.subtasks,
+              color: data.color
             });
             setEditingTask(null);
           } catch (err: any) {

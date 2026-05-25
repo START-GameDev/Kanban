@@ -156,6 +156,7 @@ export const kanbanService = {
       targetColumnId?: string | null;
       priority?: string | null;
       subtasks?: any[];
+      color?: string | null;
     }
   ) {
     const ref = doc(db, 'projects', projectId, 'tasks', taskId);
@@ -178,6 +179,9 @@ export const kanbanService = {
     if (fields.priority !== undefined) {
       data.priority = fields.priority || null;
     }
+    if (fields.color !== undefined) {
+      data.color = fields.color || null;
+    }
     await updateDoc(ref, data);
   },
 
@@ -193,7 +197,8 @@ export const kanbanService = {
     tags?: string[],
     dueDate?: Date | null,
     targetColumnId?: string | null,
-    subtasks?: any[]
+    subtasks?: any[],
+    color?: string | null
   ) {
     const data: any = {
       title,
@@ -207,6 +212,7 @@ export const kanbanService = {
       order,
       priority: priority || null,
       subtasks: subtasks || [],
+      color: color || null,
       createdAt: new Date()
     };
     await addDoc(collection(db, 'projects', projectId, 'tasks'), data);

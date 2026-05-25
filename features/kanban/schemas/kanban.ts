@@ -27,6 +27,7 @@ export const taskSchema = z.object({
   dueDate: z.date().nullable().optional(),
   targetColumnId: z.string().nullable().optional(),
   priority: z.string().optional().nullable(),
+  color: z.string().optional().nullable(),
   createdAt: z.date(),
   subtasks: z.array(subtaskSchema).optional(),
 });

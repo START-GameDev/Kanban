@@ -95,8 +95,11 @@ export function MultiSearchableSelect({
     onChange(value.filter((item) => item !== val));
   };
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreate = (e?: React.FormEvent | React.KeyboardEvent | React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const cleanSearch = search.trim();
     if (!cleanSearch) return;
 
@@ -106,10 +109,11 @@ export function MultiSearchableSelect({
 
     if (onCreateOption) {
       onCreateOption(cleanSearch);
-      // Automatically select it
-      onChange([...value, cleanSearch]);
-      setSearch('');
     }
+    
+    // Automatically select it
+    onChange([...value, cleanSearch]);
+    setSearch('');
   };
 
   const showCreateOption = allowCreation && search.trim() && !options.some(
@@ -172,7 +176,7 @@ export function MultiSearchableSelect({
           )}
         >
           {/* Search/Create bar */}
-          <form onSubmit={handleCreate} className={cn('p-2 border-b flex items-center gap-1.5 shrink-0', theme === 'light' ? 'border-zinc-100' : 'border-zinc-900')}>
+          <div className={cn('p-2 border-b flex items-center gap-1.5 shrink-0', theme === 'light' ? 'border-zinc-100' : 'border-zinc-900')}>
             <Search className="w-3.5 h-3.5 text-zinc-500 ml-1 shrink-0" />
             <input
               ref={inputRef}
@@ -180,6 +184,11 @@ export function MultiSearchableSelect({
               placeholder={searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleCreate(e);
+                }
+              }}
               className="w-full bg-transparent text-xs py-1 outline-none font-mono placeholder:text-zinc-500 border-none focus:ring-0 focus:outline-none"
             />
             {search && (
@@ -191,7 +200,7 @@ export function MultiSearchableSelect({
                 <X className="w-3 h-3" />
               </button>
             )}
-          </form>
+          </div>
 
           {/* Options list container */}
           <div className="max-h-[180px] overflow-y-auto p-1 py-1.5 space-y-0.5">
@@ -245,7 +254,7 @@ export function MultiSearchableSelect({
             {showCreateOption && (
               <button
                 type="button"
-                onClick={handleCreate}
+                onClick={(e) => handleCreate(e)}
                 className={cn(
                   'w-full flex items-center gap-2 text-left p-2 rounded-md transition-all duration-120 border border-dashed cursor-pointer text-xs',
                   theme === 'light'

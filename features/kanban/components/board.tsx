@@ -13,11 +13,105 @@ import {
   useSensors
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { useTheme } from '@/providers/theme-provider';
 import { useDroppable } from '@dnd-kit/core';
 import { TaskCard } from './task-card';
+
+interface ColumnAddDividerProps {
+  projectId: string;
+  order: number;
+  isReadOnly: boolean;
+}
+
+function ColumnAddDivider({ projectId, order, isReadOnly }: ColumnAddDividerProps) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [name, setName] = useState('');
+  const { styles, theme } = useTheme();
+
+  if (isReadOnly) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    try {
+      await kanbanService.addColumn(projectId, name.trim(), order);
+      setName('');
+      setIsAdding(false);
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="relative w-6 shrink-0 h-full group flex flex-col items-center pt-3.5 select-none">
+      {/* Linha vertical centralizada */}
+      <div className={`absolute top-0 bottom-0 w-[2px] transition-colors duration-250 ${
+        theme === 'light' 
+          ? 'bg-zinc-200/60 group-hover:bg-zinc-400' 
+          : 'bg-zinc-850/40 group-hover:bg-zinc-700'
+      }`} />
+
+      {/* Botão de + no topo */}
+      <button
+        type="button"
+        onClick={() => setIsAdding(!isAdding)}
+        className={`relative z-10 w-6 h-6 rounded-full border flex items-center justify-center shadow-md transition-all duration-200 transform scale-90 group-hover:scale-100 ${
+          isAdding
+            ? 'rotate-45 bg-rose-500 border-rose-650 text-white cursor-pointer'
+            : theme === 'light'
+              ? 'bg-white border-zinc-250 text-zinc-500 hover:text-zinc-850 hover:border-zinc-450 group-hover:opacity-100 opacity-0 cursor-pointer'
+              : 'bg-zinc-950 border-zinc-850 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700 group-hover:opacity-100 opacity-0 cursor-pointer'
+        }`}
+        title="Nova coluna aqui"
+      >
+        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+      </button>
+
+      {/* Popover flutuante para digitação (absoluto) */}
+      {isAdding && (
+        <div 
+          className={`absolute top-11 z-30 w-60 rounded-lg p-3 border shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col gap-2 ${
+            theme === 'light' 
+              ? 'bg-white/95 border-zinc-200 text-zinc-850' 
+              : 'bg-zinc-950/95 border-zinc-800 text-zinc-100'
+          }`}
+          style={{ left: '50%', transform: 'translateX(-50%)' }}
+        >
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+            <input
+              autoFocus
+              type="text"
+              placeholder="Nome da coluna..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={`text-xs border rounded-md px-3 py-1.5 w-full outline-none transition-all font-semibold ${styles.inputBgClass} ${styles.borderClass} ${styles.inputBorderClass}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setIsAdding(false);
+              }}
+            />
+            <div className="flex gap-1.5 justify-end">
+              <button
+                type="button"
+                onClick={() => setIsAdding(false)}
+                className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-tight rounded bg-transparent text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className={`px-2.5 py-1 text-[10px] font-mono uppercase tracking-tight rounded font-bold cursor-pointer ${styles.btnPrimaryClass}`}
+              >
+                Criar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ColumnView({ 
   column, 
@@ -181,6 +275,7 @@ export function Board({
   filterPriority = 'all',
   filterTag = 'all',
   filterTimer = 'all',
+  filterColor = 'all',
 }: { 
   projectId: string; 
   members: any[]; 
@@ -198,6 +293,7 @@ export function Board({
   filterPriority?: string;
   filterTag?: string;
   filterTimer?: string;
+  filterColor?: string;
 }) {
   const columns = useKanbanStore(s => s.columns);
   const rawTasks = useKanbanStore(s => s.tasks);
@@ -211,7 +307,6 @@ export function Board({
     return rawTasks.filter(t => {
       const matchCol = !filterColumnId || filterColumnId === 'all' || t.columnId === filterColumnId;
       
-      // Support filtering by assignee inside assigneeIds list too
       let matchAssignee = false;
       if (!filterAssigneeId || filterAssigneeId === 'all') {
         matchAssignee = true;
@@ -244,22 +339,25 @@ export function Board({
         } else if (filterTimer === 'completed') {
           matchTimer = !!t.dueDate && t.targetColumnId === t.columnId;
         } else if (filterTimer === 'expired') {
-          // eslint-disable-next-line react-hooks/purity
           matchTimer = !!t.dueDate && t.targetColumnId !== t.columnId && new Date(t.dueDate).getTime() < Date.now();
         } else if (filterTimer === 'near') {
           if (!t.dueDate || t.targetColumnId === t.columnId) {
             matchTimer = false;
           } else {
-            // eslint-disable-next-line react-hooks/purity
             const diff = new Date(t.dueDate).getTime() - Date.now();
             matchTimer = diff > 0 && diff <= 15 * 60 * 1000;
           }
         }
       }
+
+      let matchColor = true;
+      if (filterColor && filterColor !== 'all') {
+        matchColor = t.color === filterColor || (filterColor === 'default' && (!t.color || t.color === 'default'));
+      }
         
-      return matchCol && matchAssignee && matchPriority && matchSearch && matchTag && matchTimer;
+      return matchCol && matchAssignee && matchPriority && matchSearch && matchTag && matchTimer && matchColor;
     });
-  }, [rawTasks, filterColumnId, filterAssigneeId, filterPriority, filterSearchTerm, filterTag, filterTimer]);
+  }, [rawTasks, filterColumnId, filterAssigneeId, filterPriority, filterSearchTerm, filterTag, filterTimer, filterColor]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -304,28 +402,53 @@ export function Board({
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex h-full gap-4 w-full overflow-x-auto pb-4">
-        {columns.map(col => (
-          <ColumnView 
-            key={col.id} 
-            column={col} 
-            tasks={tasks.filter(t => t.columnId === col.id).sort((a,b) => a.order - b.order)} 
+      <div className="flex h-full gap-2 w-full overflow-x-auto pb-4">
+        {columns.length > 0 && (
+          <ColumnAddDivider
             projectId={projectId}
-            members={members}
+            order={columns[0].order - 1000}
             isReadOnly={isReadOnly}
-            onColumnContextMenu={onColumnContextMenu}
-            onTaskContextMenu={onTaskContextMenu}
-            onDeleteTaskClick={onDeleteTaskClick}
-            onEditTaskClick={onEditTaskClick}
-            onDeleteColumnClick={onDeleteColumnClick}
-            onCardClick={onCardClick}
-            onAddTaskClick={onAddTaskClick}
           />
-        ))}
+        )}
+        
+        {columns.map((col, idx) => {
+          const nextCol = columns[idx + 1];
+          const midOrder = nextCol ? (col.order + nextCol.order) / 2 : col.order + 1000;
+          return (
+            <Fragment key={col.id}>
+              <ColumnView 
+                column={col} 
+                tasks={tasks.filter(t => t.columnId === col.id).sort((a,b) => a.order - b.order)} 
+                projectId={projectId}
+                members={members}
+                isReadOnly={isReadOnly}
+                onColumnContextMenu={onColumnContextMenu}
+                onTaskContextMenu={onTaskContextMenu}
+                onDeleteTaskClick={onDeleteTaskClick}
+                onEditTaskClick={onEditTaskClick}
+                onDeleteColumnClick={onDeleteColumnClick}
+                onCardClick={onCardClick}
+                onAddTaskClick={onAddTaskClick}
+              />
+              <ColumnAddDivider
+                projectId={projectId}
+                order={midOrder}
+                isReadOnly={isReadOnly}
+              />
+            </Fragment>
+          );
+        })}
         {columns.length === 0 && (
           <div className={`flex-1 flex flex-col items-center justify-center border border-dashed rounded-lg p-12 text-center bg-black/10 ${styles.borderClass}`}>
             <p className="text-zinc-200 font-semibold text-xs uppercase tracking-wider font-mono">Quadro sem colunas</p>
-            <p className={`text-xs mt-2 max-w-[260px] leading-relaxed ${styles.textMutedClass}`}>Clique no botão &quot;Nova Coluna&quot; acima para começar a organizar as demandas de seu time.</p>
+            <p className={`text-xs mt-2 max-w-[260px] leading-relaxed ${styles.textMutedClass}`}>Clique no divisor para adicionar uma coluna e começar a organizar as demandas.</p>
+            <button
+              type="button"
+              onClick={() => kanbanService.addColumn(projectId, 'A Fazer', 1000)}
+              className={`mt-4 h-8 px-4 rounded-md flex items-center gap-1.5 transition-all text-xs font-mono font-bold uppercase tracking-wider ${styles.btnPrimaryClass}`}
+            >
+              <Plus className="w-3.5 h-3.5" /> Adicionar Coluna Padrão
+            </button>
           </div>
         )}
       </div>
