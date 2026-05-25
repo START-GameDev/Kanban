@@ -21,6 +21,16 @@ export const projectsService = {
         joinedAt: new Date()
       });
 
+      // Adicionar as 4 colunas padrão do Kanban (Backlog, A Fazer, Em Progresso, Concluído)
+      const defaultColumns = ['Backlog', 'A Fazer', 'Em Progresso', 'Concluído'];
+      defaultColumns.forEach((colName, index) => {
+        const colRef = doc(collection(db, 'projects', projectRef.id, 'columns'));
+        batch.set(colRef, {
+          name: colName,
+          order: (index + 1) * 1000
+        });
+      });
+
       await batch.commit();
       return projectRef.id;
     } catch (error) {

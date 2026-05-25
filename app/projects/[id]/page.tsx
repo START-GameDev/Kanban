@@ -8,7 +8,7 @@ import { AddTaskModal } from '@/features/kanban/components/add-task-modal';
 import { EditTaskModal } from '@/features/kanban/components/edit-task-modal';
 import { useTheme } from '@/providers/theme-provider';
 import { useAuth } from '@/providers/auth-provider';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { Loader2, ArrowLeft, Users, Plus, X, Shield, Check, Trash2, Search, Pencil, Filter } from 'lucide-react';
 import Link from 'next/link';
@@ -122,6 +122,9 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
 
   // View Task Modal State
   const [viewingTask, setViewingTask] = useState<any | null>(null);
+  
+  // Real-time active members (presence)
+  const [onlineMembers, setOnlineMembers] = useState<any[]>([]);
 
   // Menu Autoclose Timer Setup
   const menuTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -226,11 +229,48 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
       }
     );
 
+    // Actualizar presence details immediately and setup loop
+    const presenceRef = doc(db, 'projects', projectId, 'presence', user.uid);
+    const updatePresence = async () => {
+      try {
+        await setDoc(presenceRef, {
+          uid: user.uid,
+          name: user.displayName || user.email?.split('@')[0] || 'Usuário',
+          email: user.email,
+          photoURL: user.photoURL || null,
+          lastActive: new Date()
+        });
+      } catch (e) {
+        console.error("Erro ao atualizar presença:", e);
+      }
+    };
+
+    updatePresence();
+    const presenceInterval = setInterval(updatePresence, 15000);
+
+    // Listen to current online members
+    const unsubPresence = onSnapshot(collection(db, 'projects', projectId, 'presence'), (snapshot) => {
+      const now = Date.now();
+      const active = snapshot.docs
+        .map(d => d.data())
+        .filter(d => {
+          if (!d.lastActive) return false;
+          const lastActiveTime = d.lastActive.toDate ? d.lastActive.toDate().getTime() : new Date(d.lastActive).getTime();
+          return now - lastActiveTime < 45000;
+        });
+      if (isSubscribed) {
+        setOnlineMembers(active);
+      }
+    });
+
     return () => {
       isSubscribed = false;
       unsubCols();
       unsubTasks();
       unsubTags();
+      unsubPresence();
+      clearInterval(presenceInterval);
+      deleteDoc(presenceRef).catch(console.error);
     };
   }, [projectId, user, authLoading, setColumns, setTasks]);
 
@@ -497,6 +537,45 @@ export default function ProjectKanbanPage({ params }: { params: Promise<{ id: st
         {/* Collaborators and Column Adders */}
         <div className="flex flex-wrap items-center gap-3">
           
+          {/* Membros Online */}
+          {onlineMembers.length > 0 && (
+            <div className="flex items-center -space-x-1.5 overflow-hidden mr-2 select-none">
+              {onlineMembers.slice(0, 3).map((member) => (
+                <div 
+                  key={member.uid} 
+                  className="relative group cursor-help"
+                  title={`${member.name || member.email} (Online)`}
+                >
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-zinc-950 z-20 animate-pulse" />
+                  
+                  {member.photoURL ? (
+                    <img 
+                      src={member.photoURL} 
+                      alt="" 
+                      className="w-7 h-7 rounded-full object-cover border border-zinc-700/60 dark:border-zinc-800 shrink-0"
+                    />
+                  ) : (
+                    <div className={`w-7 h-7 rounded-full text-[9px] font-bold flex items-center justify-center border shrink-0 ${getAvatarColor(member.uid)}`}>
+                      {(member.name ? member.name[0] : member.email[0]).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {onlineMembers.length > 3 && (
+                <div 
+                  className={`w-7 h-7 rounded-full text-[9px] font-bold font-mono flex items-center justify-center border shrink-0 cursor-help z-10 ${
+                    theme === 'light' 
+                      ? 'bg-zinc-100 border-zinc-250 text-zinc-700' 
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                  }`}
+                  title={onlineMembers.slice(3).map(m => m.name || m.email).join(', ')}
+                >
+                  +{onlineMembers.length - 3}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Nova Membros trigger */}
           <button 
             onClick={() => {
